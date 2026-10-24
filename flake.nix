@@ -76,18 +76,22 @@
 
       # Predefined container images
       packages = forAllSystems (system: {
-        # Base builder image with core POSIX & build toolchain
-        base = mkContainer system [
+        # Base devShell & builder image with core POSIX & build toolchain
+        base-dev = mkContainer system [
           ./modules/base.nix
         ];
 
-        # Specialized builder for helixblast (Go + Node + BLAST+)
-        helixblast-builder = mkContainer system [
-          ./modules/helixblast.nix
+        # Specialized devShell & builder for helixblast (Go + Node + BLAST+)
+        helixblast-dev = mkContainer system [
+          ./modules/helixblast-dev.nix
         ];
 
+        # Backward compatibility aliases
+        base = self.packages.${system}.base-dev;
+        helixblast-builder = self.packages.${system}.helixblast-dev;
+
         # Default image
-        default = self.packages.${system}.helixblast-builder;
+        default = self.packages.${system}.helixblast-dev;
       });
     };
 }
