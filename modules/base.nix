@@ -26,16 +26,52 @@
       description = "Container image tag";
     };
 
+    basePackages = lib.mkOption {
+      type = lib.types.listOf lib.types.package;
+      default = with pkgs; [
+        # Core POSIX utilities & interactive shell
+        bashInteractive
+        coreutils
+        findutils
+        gnugrep
+        gnused
+        gnutar
+        gzip
+        which
+        procps
+
+        # Essential version control & build utilities
+        git
+        gnumake
+        cacert
+        gcc
+      ];
+      description = "Base POSIX and build utilities (inheritable by all modules, overrideable via lib.mkForce)";
+    };
+
     packages = lib.mkOption {
       type = lib.types.listOf lib.types.package;
       default = [ ];
-      description = "List of packages included in the container root filesystem";
+      description = "Module-specific packages to include alongside basePackages";
+    };
+
+    baseEnv = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [
+        "PATH=/bin:/usr/bin"
+        "SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt"
+        "SYSTEM_CERTIFICATE_PATH=/etc/ssl/certs/ca-bundle.crt"
+        "USER=root"
+        "HOME=/root"
+        "LANG=C.UTF-8"
+      ];
+      description = "Base environment variables (inheritable by all modules, overrideable via lib.mkForce)";
     };
 
     env = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];
-      description = "Environment variables injected into the container config";
+      description = "Module-specific environment variables to include alongside baseEnv";
     };
 
     workingDir = lib.mkOption {
@@ -49,35 +85,5 @@
       default = [ "/bin/bash" ];
       description = "Default entrypoint command";
     };
-  };
-
-  config = {
-    packages = with pkgs; [
-      # Core POSIX utilities & interactive shell
-      bashInteractive
-      coreutils
-      findutils
-      gnugrep
-      gnused
-      gnutar
-      gzip
-      which
-      procps
-
-      # Essential version control & build utilities
-      git
-      gnumake
-      cacert
-      gcc
-    ];
-
-    env = [
-      "PATH=/bin:/usr/bin"
-      "SSL_CERT_FILE=/etc/ssl/certs/ca-bundle.crt"
-      "SYSTEM_CERTIFICATE_PATH=/etc/ssl/certs/ca-bundle.crt"
-      "USER=root"
-      "HOME=/root"
-      "LANG=C.UTF-8"
-    ];
   };
 }

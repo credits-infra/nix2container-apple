@@ -35,7 +35,7 @@
 
           rootEnv = pkgs.buildEnv {
             name = "${cfg.name}-root";
-            paths = cfg.packages ++ [
+            paths = cfg.basePackages ++ cfg.packages ++ [
               pkgs.dockerTools.usrBinEnv
               pkgs.dockerTools.binSh
               pkgs.dockerTools.fakeNss
@@ -64,7 +64,7 @@
           ];
 
           config = {
-            Env = cfg.env;
+            Env = cfg.baseEnv ++ cfg.env;
             WorkingDir = cfg.workingDir;
             Entrypoint = cfg.entrypoint;
           };
