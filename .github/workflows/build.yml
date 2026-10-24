@@ -69,7 +69,7 @@ jobs:
         run: |
           nix build .#packages.${{ matrix.system-target.system }}.${{ matrix.module }}
 
-      - name: Push Image to GitHub Container Registry
+      - name: Push Architecture-Specific Image
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           OWNER="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
@@ -88,9 +88,37 @@ jobs:
             "docker://${PKG_REF}:${ARCH}-${{ github.sha }}" \
             --dest-creds "$CREDS"
 
-          if [ "${ARCH}" = "aarch64" ]; then
-            echo "==> Pushing ${PKG_REF}:latest for native Apple Silicon..."
-            nix run .#packages.${{ matrix.system-target.system }}.${MODULE}.copyTo -- \
-              "docker://${PKG_REF}:latest" \
-              --dest-creds "$CREDS"
-          fi
+  merge-manifests:
+    needs: [discover-modules, build-and-push]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJson(needs.discover-modules.outputs.modules) }}
+
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create Multi-Arch Manifest Index
+        run: |
+          OWNER="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+          MODULE="${{ matrix.module }}"
+          PKG_REF="ghcr.io/${OWNER}/${MODULE}"
+
+          echo "==> Creating multi-arch manifest for ${PKG_REF}:latest..."
+          docker buildx imagetools create \
+            -t "${PKG_REF}:latest" \
+            "${PKG_REF}:aarch64-latest" \
+            "${PKG_REF}:x86_64-latest"
+
+          echo "==> Creating multi-arch manifest for ${PKG_REF}:${{ github.sha }}..."
+          docker buildx imagetools create \
+            -t "${PKG_REF}:${{ github.sha }}" \
+            "${PKG_REF}:aarch64-${{ github.sha }}" \
+            "${PKG_REF}:x86_64-${{ github.sha }}"
