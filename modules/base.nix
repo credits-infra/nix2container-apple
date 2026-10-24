@@ -8,10 +8,10 @@
       description = "Container image name / identifier";
     };
 
-    registry = lib.mkOption {
+    imageName = lib.mkOption {
       type = lib.types.str;
       default = "ghcr.io/credits-infra/nix2container-apple";
-      description = "Container registry repository prefix";
+      description = "Container image repository name";
     };
 
     tag = lib.mkOption {
