@@ -32,6 +32,7 @@
             git
             gnumake
             cacert
+            gcc
 
             # Toolchains for helixblast & modern web/backend
             go
@@ -83,6 +84,7 @@
               "GOPATH=/go"
               "GOCACHE=/go/cache"
               "NPM_CONFIG_CACHE=/npm-cache"
+              "CGO_ENABLED=0"
               "USER=root"
               "HOME=/root"
               "LANG=C.UTF-8"
