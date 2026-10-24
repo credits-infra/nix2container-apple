@@ -19,16 +19,23 @@ Traditional container development environments rely on mutating package managers
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Architecture: Multi-Package & Role-based Containers
+
+This repository publishes **independent OCI packages** with native `:latest` tags under `ghcr.io/credits-infra/`:
+
+| Package | Role | Contents | Target Usage |
+| :--- | :--- | :--- | :--- |
+| **`ghcr.io/credits-infra/base-dev`** | Base DevShell / Builder | POSIX core, Bash, Git, Make, GCC, SSL certs | Base foundation for all builder modules |
+| **`ghcr.io/credits-infra/helixblast-dev`** | Specialized DevShell / Builder | `base-dev` + Go 1.26, Node 24, BLAST+, golangci-lint | Development, build, and tests for helixblast |
+| *(Future)* **`ghcr.io/credits-infra/helixblast`** | Production Release Runtime | Minimal distroless, compiled binaries only | Zero-build-tool production release deployment |
 
 ```
 +-------------------------------------------------------------+
 | External Build Stage (GitHub Actions)                       |
 |   flake.nix (Evaluates modules) -> nix2container            |
-|   ├── modules/base.nix (Core POSIX, git, make, gcc, certs)  |
-|   ├── modules/helixblast.nix (Go, Node, Blast, etc.)        |
-|   └── modules/<custom>.nix                                  |
-|   Outputs: OCI images pushed to ghcr.io                     |
+|   ├── modules/base.nix           -> base-dev:latest         |
+|   ├── modules/helixblast-dev.nix -> helixblast-dev:latest   |
+|   └── modules/<name>-dev.nix     -> <name>-dev:latest       |
 |   Architectures: aarch64-linux (Apple Silicon), x86_64-linux|
 +-------------------------------------------------------------+
                             │
@@ -50,7 +57,7 @@ Traditional container development environments rely on mutating package managers
 
 All container definitions use the **Nix module system** (`lib.evalModules`), allowing specialized builders to inherit and extend `base.nix` with zero duplication.
 
-### 1. Create a module in `modules/<name>.nix`
+### 1. Create a module in `modules/<name>-dev.nix`
 
 ```nix
 { pkgs, ... }:
@@ -60,11 +67,12 @@ All container definitions use the **Nix module system** (`lib.evalModules`), all
     ./base.nix
   ];
 
-  name = "rust-builder";
+  name = "rust-dev";
 
   packages = with pkgs; [
     rustc
     cargo
+    clippy
     rust-analyzer
   ];
 
@@ -79,13 +87,13 @@ All container definitions use the **Nix module system** (`lib.evalModules`), all
 
 ```nix
 packages = forAllSystems (system: {
-  base = mkContainer system [ ./modules/base.nix ];
-  rust-builder = mkContainer system [ ./modules/rust.nix ];
-  helixblast-builder = mkContainer system [ ./modules/helixblast.nix ];
+  base-dev = mkContainer system [ ./modules/base.nix ];
+  helixblast-dev = mkContainer system [ ./modules/helixblast-dev.nix ];
+  rust-dev = mkContainer system [ ./modules/rust-dev.nix ];
 });
 ```
 
-That's it! GitHub Actions and `nix run .#packages.aarch64-linux.<name>.copyTo` will automatically handle building and pushing the new container image.
+GitHub Actions will automatically build and publish `ghcr.io/credits-infra/rust-dev:latest` as an independent package!
 
 ---
 
@@ -103,15 +111,21 @@ That's it! GitHub Actions and `nix run .#packages.aarch64-linux.<name>.copyTo` w
    container registry login ghcr.io
    ```
 
-### Running the Immutable Builder
+### Running the Immutable Builder / DevShell
 
-Run the prebuilt container as an interactive development shell or builder:
+Run the prebuilt container as an interactive development shell or builder (defaults to `helixblast-dev:latest`):
 
 ```bash
 ./scripts/apple-run.sh
 ```
 
-Or run arbitrary build commands inside:
+Or switch packages with `PACKAGE=...`:
+
+```bash
+PACKAGE=base-dev ./scripts/apple-run.sh
+```
+
+Or run arbitrary build / test commands directly:
 
 ```bash
 ./scripts/apple-run.sh make build
