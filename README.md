@@ -53,13 +53,16 @@ This repository publishes **independent OCI packages** with native `:latest` tag
 
 ---
 
-## 🧩 Modular Architecture: Adding a New Container
+## 🧩 Zero-Maintenance Modular Architecture
 
-All container definitions use the **Nix module system** (`lib.evalModules`), allowing specialized builders to inherit and extend `base.nix` with zero duplication.
+All container definitions use the **Nix module system** (`lib.evalModules`). Both `flake.nix` and GitHub Actions CI automatically discover all non-base module files in `modules/`.
 
-### 1. Create a module in `modules/<name>-dev.nix`
+### Adding a New Container (Single Step!)
+
+To add a new devShell / builder container, **simply create a new file** `modules/<name>-dev.nix`:
 
 ```nix
+# modules/rust-dev.nix
 { pkgs, ... }:
 
 {
@@ -83,17 +86,19 @@ All container definitions use the **Nix module system** (`lib.evalModules`), all
 }
 ```
 
-### 2. Register the module in `flake.nix`
+That's it!
+- `flake.nix` automatically registers `packages.<system>.rust-dev`.
+- GitHub Actions CI dynamically generates a matrix build on native ARM64 and x86_64 runners.
+- The new package `ghcr.io/credits-infra/rust-dev:latest` is automatically built and pushed.
+- You don't need to touch `flake.nix` or any GitHub Actions YAML files!
 
-```nix
-packages = forAllSystems (system: {
-  base-dev = mkContainer system [ ./modules/base.nix ];
-  helixblast-dev = mkContainer system [ ./modules/helixblast-dev.nix ];
-  rust-dev = mkContainer system [ ./modules/rust-dev.nix ];
-});
-```
+---
 
-GitHub Actions will automatically build and publish `ghcr.io/credits-infra/rust-dev:latest` as an independent package!
+## ⚙️ Automated Maintenance & Resource Optimization
+
+1. **Path-Filtered CI Triggering**: Documentation-only commits (`**.md`, `docs/**`, `.gitignore`, `LICENSE*`) automatically bypass CI to avoid wasting runner compute hours.
+2. **Dynamic Matrix Build**: Only active non-base container modules are compiled, isolating failures and maximizing build parallelism.
+3. **Automated Package Pruning**: A scheduled workflow periodically cleans up outdated commit-hash revisions while safeguarding `latest` and `*-latest` tags.
 
 ---
 
