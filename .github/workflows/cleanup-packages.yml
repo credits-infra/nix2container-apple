@@ -1,0 +1,44 @@
+name: Cleanup Outdated Packages
+
+on:
+  schedule:
+    # Run every Sunday at 02:00 UTC
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+
+permissions:
+  packages: write
+  contents: read
+
+jobs:
+  discover:
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.find.outputs.modules }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find packages
+        id: find
+        run: |
+          MODULES=$(find modules -maxdepth 1 -name '*.nix' ! -name 'base.nix' -exec basename {} .nix \; | sort -u | jq -R -s -c 'split("\n")[:-1]')
+          echo "Discovered packages to clean: $MODULES"
+          echo "modules=$MODULES" >> "$GITHUB_OUTPUT"
+
+  cleanup-versions:
+    needs: discover
+    if: needs.discover.outputs.modules != '[]'
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ${{ fromJson(needs.discover.outputs.modules) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete outdated revisions for ${{ matrix.package }}
+        uses: actions/delete-package-versions@v5
+        with:
+          package-name: ${{ matrix.package }}
+          package-type: 'container'
+          min-versions-to-keep: 5
+          ignore-versions: '^(latest|aarch64-latest|x86_64-latest)$'
