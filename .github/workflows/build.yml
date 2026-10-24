@@ -36,28 +36,46 @@ jobs:
       - name: Magic Nix Cache
         uses: DeterminateSystems/magic-nix-cache-action@main
 
-      - name: Build OCI Image
+      - name: Build OCI Images
         run: |
+          echo "Building base container image..."
+          nix build .#packages.${{ matrix.system }}.base
+          echo "Building helixblast-builder container image..."
           nix build .#packages.${{ matrix.system }}.helixblast-builder
 
-      - name: Push Image to GitHub Container Registry
+      - name: Push Images to GitHub Container Registry
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           IMAGE_REF="ghcr.io/$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')"
-          
-          echo "Pushing ${IMAGE_REF}:${{ matrix.arch }}-latest..."
+          CREDS="${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}"
+
+          echo "==> Pushing base container image..."
+          nix run .#packages.${{ matrix.system }}.base.copyTo -- \
+            "docker://${IMAGE_REF}:base-${{ matrix.arch }}-latest" \
+            --dest-creds "$CREDS"
+
+          if [ "${{ matrix.arch }}" = "aarch64" ]; then
+            nix run .#packages.${{ matrix.system }}.base.copyTo -- \
+              "docker://${IMAGE_REF}:base" \
+              --dest-creds "$CREDS"
+          fi
+
+          echo "==> Pushing helixblast-builder container image..."
           nix run .#packages.${{ matrix.system }}.helixblast-builder.copyTo -- \
             "docker://${IMAGE_REF}:${{ matrix.arch }}-latest" \
-            --dest-creds "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}"
+            --dest-creds "$CREDS"
 
-          echo "Pushing ${IMAGE_REF}:${{ matrix.arch }}-${{ github.sha }}..."
+          nix run .#packages.${{ matrix.system }}.helixblast-builder.copyTo -- \
+            "docker://${IMAGE_REF}:helixblast-${{ matrix.arch }}-latest" \
+            --dest-creds "$CREDS"
+
           nix run .#packages.${{ matrix.system }}.helixblast-builder.copyTo -- \
             "docker://${IMAGE_REF}:${{ matrix.arch }}-${{ github.sha }}" \
-            --dest-creds "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}"
+            --dest-creds "$CREDS"
 
           if [ "${{ matrix.arch }}" = "aarch64" ]; then
             echo "Pushing default latest tag for aarch64..."
             nix run .#packages.${{ matrix.system }}.helixblast-builder.copyTo -- \
               "docker://${IMAGE_REF}:latest" \
-              --dest-creds "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}"
+              --dest-creds "$CREDS"
           fi
