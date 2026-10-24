@@ -40,16 +40,30 @@
             blast
           ];
 
-          baseFiles = pkgs.runCommand "base-files" { } ''
-            mkdir -p $out/bin $out/usr/bin $out/tmp $out/workspace $out/go $out/npm-cache $out/root
-            ln -s ${pkgs.coreutils}/bin/env $out/usr/bin/env
-            ln -sf ${pkgs.bashInteractive}/bin/bash $out/bin/sh
+          extraDirs = pkgs.runCommand "extra-dirs" { } ''
+            mkdir -p $out/tmp $out/workspace $out/go $out/npm-cache $out/root
           '';
 
           rootEnv = pkgs.buildEnv {
             name = "root-env";
-            paths = devTools;
-            pathsToLink = [ "/bin" "/etc" "/usr" "/share" ];
+            paths = devTools ++ [
+              pkgs.dockerTools.usrBinEnv
+              pkgs.dockerTools.binSh
+              pkgs.dockerTools.fakeNss
+              extraDirs
+            ];
+            pathsToLink = [
+              "/bin"
+              "/etc"
+              "/usr"
+              "/share"
+              "/tmp"
+              "/workspace"
+              "/go"
+              "/npm-cache"
+              "/root"
+              "/var"
+            ];
           };
         in
         n2c.buildImage {
@@ -57,23 +71,9 @@
           tag = "latest";
 
           copyToRoot = [
-            baseFiles
             rootEnv
-            pkgs.dockerTools.fakeNss
           ];
 
-          perms = [
-            {
-              path = baseFiles;
-              regex = "^/tmp";
-              mode = "1777";
-            }
-            {
-              path = baseFiles;
-              regex = "^/(workspace|go|npm-cache|root)";
-              mode = "0777";
-            }
-          ];
 
           config = {
             Env = [
