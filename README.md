@@ -71,3 +71,24 @@ Or run arbitrary build commands inside:
 ./scripts/apple-run.sh make build
 ./scripts/apple-run.sh go test ./...
 ```
+
+---
+
+## 🧪 Verified Example: EndCredits/helixblast
+
+This builder container has been tested and verified with [`EndCredits/helixblast`](https://github.com/EndCredits/helixblast), a modern full-stack bioinformatics application requiring Go, Node.js (Vite + React), and NCBI BLAST+:
+
+```bash
+# Clone helixblast
+git clone git@github.com:EndCredits/helixblast.git
+cd helixblast
+
+# 1. Build React frontend & all Go binaries inside immutable container
+/path/to/nix2container-apple/scripts/apple-run.sh make build
+
+# 2. Run test suite
+/path/to/nix2container-apple/scripts/apple-run.sh go test ./internal/...
+```
+
+All build artifacts (`helixblast`, `helixblast-index`, `helixblast-prepare`) are compiled to native `linux/arm64` ELF binaries, written directly into the mounted project directory on the macOS host, with Go module and npm caching shared seamlessly with the host.
+
