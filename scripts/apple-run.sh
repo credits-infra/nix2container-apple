@@ -36,12 +36,12 @@ RUN_ARGS=(
 if [ $# -eq 0 ]; then
   echo "==> Entering immutable container environment ($IMAGE)..."
   echo "    Rootfs is read-only. External mounts: $(pwd) -> /workspace, $HOST_GO_DIR -> /go"
-  exec container run -it "${RUN_ARGS[@]}" "$IMAGE" /bin/bash
+  exec container run -it "${RUN_ARGS[@]}" "$IMAGE"
 else
-  # Run user-supplied command
+  # Run user-supplied command via bash entrypoint
   if [ -t 0 ]; then
-    exec container run -it "${RUN_ARGS[@]}" "$IMAGE" "$@"
+    exec container run -it "${RUN_ARGS[@]}" "$IMAGE" -c "$*"
   else
-    exec container run "${RUN_ARGS[@]}" "$IMAGE" "$@"
+    exec container run "${RUN_ARGS[@]}" "$IMAGE" -c "$*"
   fi
 fi
