@@ -1,0 +1,63 @@
+name: Build and Push OCI Image
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-and-push:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - system: aarch64-linux
+            arch: aarch64
+            runs-on: ubuntu-24.04-arm
+          - system: x86_64-linux
+            arch: x86_64
+            runs-on: ubuntu-latest
+
+    runs-on: ${{ matrix.runs-on }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+
+      - name: Magic Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Build OCI Image
+        run: |
+          nix build .#packages.${{ matrix.system }}.helixblast-builder
+
+      - name: Push Image to GitHub Container Registry
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          IMAGE_REF="ghcr.io/$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')"
+          
+          echo "Pushing ${IMAGE_REF}:${{ matrix.arch }}-latest..."
+          nix run .#packages.${{ matrix.system }}.helixblast-builder.copyTo -- \
+            "docker://${IMAGE_REF}:${{ matrix.arch }}-latest" \
+            --dest-creds "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}"
+
+          echo "Pushing ${IMAGE_REF}:${{ matrix.arch }}-${{ github.sha }}..."
+          nix run .#packages.${{ matrix.system }}.helixblast-builder.copyTo -- \
+            "docker://${IMAGE_REF}:${{ matrix.arch }}-${{ github.sha }}" \
+            --dest-creds "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}"
+
+          if [ "${{ matrix.arch }}" = "aarch64" ]; then
+            echo "Pushing default latest tag for aarch64..."
+            nix run .#packages.${{ matrix.system }}.helixblast-builder.copyTo -- \
+              "docker://${IMAGE_REF}:latest" \
+              --dest-creds "${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}"
+          fi
