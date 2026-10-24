@@ -38,44 +38,43 @@ jobs:
 
       - name: Build OCI Images
         run: |
-          echo "Building base container image..."
-          nix build .#packages.${{ matrix.system }}.base
-          echo "Building helixblast-builder container image..."
-          nix build .#packages.${{ matrix.system }}.helixblast-builder
+          echo "Building base-dev container image..."
+          nix build .#packages.${{ matrix.system }}.base-dev
+          echo "Building helixblast-dev container image..."
+          nix build .#packages.${{ matrix.system }}.helixblast-dev
 
       - name: Push Images to GitHub Container Registry
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          IMAGE_REF="ghcr.io/$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')"
+          OWNER="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
           CREDS="${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}"
 
-          echo "==> Pushing base container image..."
-          nix run .#packages.${{ matrix.system }}.base.copyTo -- \
-            "docker://${IMAGE_REF}:base-${{ matrix.arch }}-latest" \
+          echo "==> Pushing ghcr.io/${OWNER}/base-dev..."
+          nix run .#packages.${{ matrix.system }}.base-dev.copyTo -- \
+            "docker://ghcr.io/${OWNER}/base-dev:${{ matrix.arch }}-latest" \
+            --dest-creds "$CREDS"
+
+          nix run .#packages.${{ matrix.system }}.base-dev.copyTo -- \
+            "docker://ghcr.io/${OWNER}/base-dev:${{ matrix.arch }}-${{ github.sha }}" \
             --dest-creds "$CREDS"
 
           if [ "${{ matrix.arch }}" = "aarch64" ]; then
-            nix run .#packages.${{ matrix.system }}.base.copyTo -- \
-              "docker://${IMAGE_REF}:base" \
+            nix run .#packages.${{ matrix.system }}.base-dev.copyTo -- \
+              "docker://ghcr.io/${OWNER}/base-dev:latest" \
               --dest-creds "$CREDS"
           fi
 
-          echo "==> Pushing helixblast-builder container image..."
-          nix run .#packages.${{ matrix.system }}.helixblast-builder.copyTo -- \
-            "docker://${IMAGE_REF}:${{ matrix.arch }}-latest" \
+          echo "==> Pushing ghcr.io/${OWNER}/helixblast-dev..."
+          nix run .#packages.${{ matrix.system }}.helixblast-dev.copyTo -- \
+            "docker://ghcr.io/${OWNER}/helixblast-dev:${{ matrix.arch }}-latest" \
             --dest-creds "$CREDS"
 
-          nix run .#packages.${{ matrix.system }}.helixblast-builder.copyTo -- \
-            "docker://${IMAGE_REF}:helixblast-${{ matrix.arch }}-latest" \
-            --dest-creds "$CREDS"
-
-          nix run .#packages.${{ matrix.system }}.helixblast-builder.copyTo -- \
-            "docker://${IMAGE_REF}:${{ matrix.arch }}-${{ github.sha }}" \
+          nix run .#packages.${{ matrix.system }}.helixblast-dev.copyTo -- \
+            "docker://ghcr.io/${OWNER}/helixblast-dev:${{ matrix.arch }}-${{ github.sha }}" \
             --dest-creds "$CREDS"
 
           if [ "${{ matrix.arch }}" = "aarch64" ]; then
-            echo "Pushing default latest tag for aarch64..."
-            nix run .#packages.${{ matrix.system }}.helixblast-builder.copyTo -- \
-              "docker://${IMAGE_REF}:latest" \
+            nix run .#packages.${{ matrix.system }}.helixblast-dev.copyTo -- \
+              "docker://ghcr.io/${OWNER}/helixblast-dev:latest" \
               --dest-creds "$CREDS"
           fi
