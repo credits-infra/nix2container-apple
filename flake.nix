@@ -69,29 +69,38 @@
             Entrypoint = cfg.entrypoint;
           };
         };
+      modulesDir = ./modules;
+
+      # Discover all module definitions in ./modules, excluding base.nix
+      moduleFiles = nixpkgs.lib.filterAttrs (name: type:
+        type == "regular" &&
+        nixpkgs.lib.hasSuffix ".nix" name &&
+        name != "base.nix"
+      ) (builtins.readDir modulesDir);
+
+      # Dynamically instantiate a container image for each discovered module
+      makeModulePackages = system:
+        nixpkgs.lib.mapAttrs' (fileName: _:
+          let
+            moduleName = nixpkgs.lib.removeSuffix ".nix" fileName;
+          in
+          nixpkgs.lib.nameValuePair moduleName (mkContainer system [ (modulesDir + "/${fileName}") ])
+        ) moduleFiles;
     in
     {
       # Export modular builder for external flakes or reuse
       lib.mkContainer = mkContainer;
 
-      # Predefined container images
-      packages = forAllSystems (system: {
-        # Base devShell & builder image with core POSIX & build toolchain
-        base-dev = mkContainer system [
-          ./modules/base.nix
-        ];
-
-        # Specialized devShell & builder for helixblast (Go + Node + BLAST+)
-        helixblast-dev = mkContainer system [
-          ./modules/helixblast-dev.nix
-        ];
-
-        # Backward compatibility aliases
-        base = self.packages.${system}.base-dev;
-        helixblast-builder = self.packages.${system}.helixblast-dev;
-
-        # Default image
-        default = self.packages.${system}.helixblast-dev;
-      });
+      # Dynamically discovered container packages
+      packages = forAllSystems (system:
+        let
+          pkgs = makeModulePackages system;
+        in
+        pkgs // {
+          # Default image pointing to helixblast-dev or first discovered package
+          default = pkgs.helixblast-dev or (builtins.head (builtins.attrValues pkgs));
+          helixblast-builder = pkgs.helixblast-dev or null;
+        }
+      );
     };
 }
