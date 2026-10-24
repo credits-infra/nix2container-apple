@@ -4,19 +4,25 @@
   options = {
     name = lib.mkOption {
       type = lib.types.str;
-      default = "base";
+      default = "base-dev";
       description = "Container image name / identifier";
+    };
+
+    registry = lib.mkOption {
+      type = lib.types.str;
+      default = "ghcr.io/credits-infra";
+      description = "Container registry repository prefix";
     };
 
     imageName = lib.mkOption {
       type = lib.types.str;
-      default = "ghcr.io/credits-infra/nix2container-apple";
-      description = "Container image repository name";
+      default = "${config.registry}/${config.name}";
+      description = "Full container image repository name";
     };
 
     tag = lib.mkOption {
       type = lib.types.str;
-      default = config.name;
+      default = "latest";
       description = "Container image tag";
     };
 
