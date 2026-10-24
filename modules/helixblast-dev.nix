@@ -5,7 +5,7 @@
     ./base.nix
   ];
 
-  name = "helixblast-builder";
+  name = "helixblast-dev";
 
   packages = with pkgs; [
     go
