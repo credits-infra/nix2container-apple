@@ -92,13 +92,33 @@ That's it!
 - The new package `ghcr.io/credits-infra/rust-dev:latest` is automatically built and pushed.
 - You don't need to touch `flake.nix` or any GitHub Actions YAML files!
 
+### Customizing or Overriding Base Dependencies
+
+Modules inherit `basePackages` (POSIX tools, GCC, Make, Git, SSL certs) and `baseEnv` by default. If a specialized module needs to completely replace or customize the base toolchain (e.g. replacing GNU tools with Busybox or changing default PATH):
+
+```nix
+{ lib, pkgs, ... }:
+
+{
+  imports = [ ./base.nix ];
+  name = "minimal-dev";
+
+  # Completely override the base packages using lib.mkForce
+  basePackages = lib.mkForce (with pkgs; [ busybox ]);
+
+  # Completely override the base environment variables
+  baseEnv = lib.mkForce [ "PATH=/bin" "USER=root" ];
+}
+```
+
 ---
 
 ## ⚙️ Automated Maintenance & Resource Optimization
 
-1. **Path-Filtered CI Triggering**: Documentation-only commits (`**.md`, `docs/**`, `.gitignore`, `LICENSE*`) automatically bypass CI to avoid wasting runner compute hours.
-2. **Dynamic Matrix Build**: Only active non-base container modules are compiled, isolating failures and maximizing build parallelism.
-3. **Automated Package Pruning**: A scheduled workflow periodically cleans up outdated commit-hash revisions while safeguarding `latest` and `*-latest` tags.
+1. **Multi-Arch OCI Manifest Index**: GitHub Actions uses `docker buildx imagetools` to merge `aarch64` and `x86_64` images into a single multi-platform `:latest` index. Apple Silicon automatically pulls `aarch64`; Intel/CI pulls `x86_64`.
+2. **Path-Filtered CI Triggering**: Documentation-only commits (`**.md`, `docs/**`, `.gitignore`, `LICENSE*`) automatically bypass CI to avoid wasting runner compute hours.
+3. **Dynamic Matrix Build**: Only active non-base container modules are compiled, isolating failures and maximizing build parallelism.
+4. **Automated Package Pruning**: A scheduled workflow periodically cleans up outdated commit-hash revisions while safeguarding `latest` and `*-latest` tags.
 
 ---
 
@@ -116,25 +136,29 @@ That's it!
    container registry login ghcr.io
    ```
 
-### Running the Immutable Builder / DevShell
+### Running with `apple-run.sh` CLI
 
-Run the prebuilt container as an interactive development shell or builder (defaults to `helixblast-dev:latest`):
+`apple-run.sh` is a flexible launcher that handles volume mapping, read-only rootfs enforcement, and safe argument passing:
 
 ```bash
+# 1. Enter default interactive devShell (helixblast-dev:latest)
 ./scripts/apple-run.sh
-```
 
-Or switch packages with `PACKAGE=...`:
+# 2. Select a different container package
+./scripts/apple-run.sh -p base-dev gcc --version
 
-```bash
-PACKAGE=base-dev ./scripts/apple-run.sh
-```
-
-Or run arbitrary build / test commands directly:
-
-```bash
+# 3. Execute build or test commands safely (preserving quotes and spaces)
 ./scripts/apple-run.sh make build
-./scripts/apple-run.sh go test ./...
+./scripts/apple-run.sh go test -run "Test.*" ./internal/...
+
+# 4. Run with writeable rootfs for debugging
+./scripts/apple-run.sh --rw bash
+
+# 5. Run with Rosetta 2 translation for x86_64 images
+./scripts/apple-run.sh --rosetta -t x86_64-latest bash
+
+# 6. List cached container images
+./scripts/apple-run.sh --list
 ```
 
 ---
