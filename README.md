@@ -24,8 +24,11 @@ Traditional container development environments rely on mutating package managers
 ```
 +-------------------------------------------------------------+
 | External Build Stage (GitHub Actions)                       |
-|   flake.nix -> nix2container                                |
-|   Outputs: OCI image pushed to ghcr.io                      |
+|   flake.nix (Evaluates modules) -> nix2container            |
+|   ├── modules/base.nix (Core POSIX, git, make, gcc, certs)  |
+|   ├── modules/helixblast.nix (Go, Node, Blast, etc.)        |
+|   └── modules/<custom>.nix                                  |
+|   Outputs: OCI images pushed to ghcr.io                     |
 |   Architectures: aarch64-linux (Apple Silicon), x86_64-linux|
 +-------------------------------------------------------------+
                             │
@@ -40,6 +43,49 @@ Traditional container development environments rely on mutating package managers
 |     -v $HOME/.npm:/npm-cache                                |
 +-------------------------------------------------------------+
 ```
+
+---
+
+## 🧩 Modular Architecture: Adding a New Container
+
+All container definitions use the **Nix module system** (`lib.evalModules`), allowing specialized builders to inherit and extend `base.nix` with zero duplication.
+
+### 1. Create a module in `modules/<name>.nix`
+
+```nix
+{ pkgs, ... }:
+
+{
+  imports = [
+    ./base.nix
+  ];
+
+  name = "rust-builder";
+
+  packages = with pkgs; [
+    rustc
+    cargo
+    rust-analyzer
+  ];
+
+  env = [
+    "CARGO_HOME=/cargo"
+    "RUSTUP_HOME=/rustup"
+  ];
+}
+```
+
+### 2. Register the module in `flake.nix`
+
+```nix
+packages = forAllSystems (system: {
+  base = mkContainer system [ ./modules/base.nix ];
+  rust-builder = mkContainer system [ ./modules/rust.nix ];
+  helixblast-builder = mkContainer system [ ./modules/helixblast.nix ];
+});
+```
+
+That's it! GitHub Actions and `nix run .#packages.aarch64-linux.<name>.copyTo` will automatically handle building and pushing the new container image.
 
 ---
 
