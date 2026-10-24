@@ -1,10 +1,20 @@
-name: Build and Push OCI Image
+name: Build and Push OCI Images
 
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE*'
   pull_request:
     branches: [ "main" ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.gitignore'
+      - 'LICENSE*'
   workflow_dispatch:
 
 permissions:
@@ -12,19 +22,38 @@ permissions:
   packages: write
 
 jobs:
+  discover-modules:
+    runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.find.outputs.modules }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find container modules
+        id: find
+        run: |
+          # Find all .nix files in modules/ except base.nix
+          MODULES=$(find modules -maxdepth 1 -name '*.nix' ! -name 'base.nix' -exec basename {} .nix \; | sort -u | jq -R -s -c 'split("\n")[:-1]')
+          echo "Discovered modules: $MODULES"
+          echo "modules=$MODULES" >> "$GITHUB_OUTPUT"
+
   build-and-push:
+    needs: discover-modules
+    if: needs.discover-modules.outputs.modules != '[]'
     strategy:
       fail-fast: false
       matrix:
-        include:
+        system-target:
           - system: aarch64-linux
             arch: aarch64
             runs-on: ubuntu-24.04-arm
           - system: x86_64-linux
             arch: x86_64
             runs-on: ubuntu-latest
+        module: ${{ fromJson(needs.discover-modules.outputs.modules) }}
 
-    runs-on: ${{ matrix.runs-on }}
+    runs-on: ${{ matrix.system-target.runs-on }}
 
     steps:
       - name: Checkout repository
@@ -36,45 +65,32 @@ jobs:
       - name: Magic Nix Cache
         uses: DeterminateSystems/magic-nix-cache-action@main
 
-      - name: Build OCI Images
+      - name: Build OCI Image (${{ matrix.module }} / ${{ matrix.system-target.system }})
         run: |
-          echo "Building base-dev container image..."
-          nix build .#packages.${{ matrix.system }}.base-dev
-          echo "Building helixblast-dev container image..."
-          nix build .#packages.${{ matrix.system }}.helixblast-dev
+          nix build .#packages.${{ matrix.system-target.system }}.${{ matrix.module }}
 
-      - name: Push Images to GitHub Container Registry
+      - name: Push Image to GitHub Container Registry
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           OWNER="$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')"
+          MODULE="${{ matrix.module }}"
+          ARCH="${{ matrix.system-target.arch }}"
+          PKG_REF="ghcr.io/${OWNER}/${MODULE}"
           CREDS="${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}"
 
-          echo "==> Pushing ghcr.io/${OWNER}/base-dev..."
-          nix run .#packages.${{ matrix.system }}.base-dev.copyTo -- \
-            "docker://ghcr.io/${OWNER}/base-dev:${{ matrix.arch }}-latest" \
+          echo "==> Pushing ${PKG_REF}:${ARCH}-latest..."
+          nix run .#packages.${{ matrix.system-target.system }}.${MODULE}.copyTo -- \
+            "docker://${PKG_REF}:${ARCH}-latest" \
             --dest-creds "$CREDS"
 
-          nix run .#packages.${{ matrix.system }}.base-dev.copyTo -- \
-            "docker://ghcr.io/${OWNER}/base-dev:${{ matrix.arch }}-${{ github.sha }}" \
+          echo "==> Pushing ${PKG_REF}:${ARCH}-${{ github.sha }}..."
+          nix run .#packages.${{ matrix.system-target.system }}.${MODULE}.copyTo -- \
+            "docker://${PKG_REF}:${ARCH}-${{ github.sha }}" \
             --dest-creds "$CREDS"
 
-          if [ "${{ matrix.arch }}" = "aarch64" ]; then
-            nix run .#packages.${{ matrix.system }}.base-dev.copyTo -- \
-              "docker://ghcr.io/${OWNER}/base-dev:latest" \
-              --dest-creds "$CREDS"
-          fi
-
-          echo "==> Pushing ghcr.io/${OWNER}/helixblast-dev..."
-          nix run .#packages.${{ matrix.system }}.helixblast-dev.copyTo -- \
-            "docker://ghcr.io/${OWNER}/helixblast-dev:${{ matrix.arch }}-latest" \
-            --dest-creds "$CREDS"
-
-          nix run .#packages.${{ matrix.system }}.helixblast-dev.copyTo -- \
-            "docker://ghcr.io/${OWNER}/helixblast-dev:${{ matrix.arch }}-${{ github.sha }}" \
-            --dest-creds "$CREDS"
-
-          if [ "${{ matrix.arch }}" = "aarch64" ]; then
-            nix run .#packages.${{ matrix.system }}.helixblast-dev.copyTo -- \
-              "docker://ghcr.io/${OWNER}/helixblast-dev:latest" \
+          if [ "${ARCH}" = "aarch64" ]; then
+            echo "==> Pushing ${PKG_REF}:latest for native Apple Silicon..."
+            nix run .#packages.${{ matrix.system-target.system }}.${MODULE}.copyTo -- \
+              "docker://${PKG_REF}:latest" \
               --dest-creds "$CREDS"
           fi
