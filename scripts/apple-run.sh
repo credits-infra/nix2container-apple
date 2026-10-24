@@ -15,7 +15,8 @@ if ! container system status >/dev/null 2>&1; then
 fi
 
 # Configuration & Defaults
-IMAGE="${IMAGE:-ghcr.io/credits-infra/nix2container-apple:aarch64-latest}"
+DEFAULT_PACKAGE="${PACKAGE:-helixblast-dev}"
+IMAGE="${IMAGE:-ghcr.io/credits-infra/${DEFAULT_PACKAGE}:latest}"
 HOST_GO_DIR="${HOST_GO_DIR:-$HOME/go}"
 HOST_NPM_DIR="${HOST_NPM_DIR:-$HOME/.npm}"
 
