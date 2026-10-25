@@ -74,6 +74,24 @@
       description = "Module-specific environment variables to include alongside baseEnv";
     };
 
+    layers = lib.mkOption {
+      type = lib.types.listOf lib.types.anything;
+      default = [ ];
+      description = "Additional intermediate nix2container layers to insert between base and top layer";
+    };
+
+    maxLayers = lib.mkOption {
+      type = lib.types.int;
+      default = 10;
+      description = "Maximum number of layers for package closure splitting in the application layer";
+    };
+
+    baseMaxLayers = lib.mkOption {
+      type = lib.types.int;
+      default = 1;
+      description = "Maximum number of layers for the base system layer";
+    };
+
     workingDir = lib.mkOption {
       type = lib.types.str;
       default = "/workspace";

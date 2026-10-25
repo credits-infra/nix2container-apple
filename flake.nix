@@ -33,9 +33,9 @@
             mkdir -p $out/tmp $out/workspace $out/go $out/npm-cache $out/root
           '';
 
-          rootEnv = pkgs.buildEnv {
-            name = "${cfg.name}-root";
-            paths = cfg.basePackages ++ cfg.packages ++ [
+          baseEnv = pkgs.buildEnv {
+            name = "base-system-root";
+            paths = cfg.basePackages ++ [
               pkgs.dockerTools.usrBinEnv
               pkgs.dockerTools.binSh
               pkgs.dockerTools.fakeNss
@@ -54,14 +54,31 @@
               "/var"
             ];
           };
+
+          baseLayer = n2c.buildLayer {
+            copyToRoot = [ baseEnv ];
+            maxLayers = cfg.baseMaxLayers;
+          };
+
+          appEnv = pkgs.lib.optional (cfg.packages != [ ]) (pkgs.buildEnv {
+            name = "${cfg.name}-packages-root";
+            paths = cfg.packages;
+            pathsToLink = [
+              "/bin"
+              "/etc"
+              "/usr"
+              "/share"
+              "/lib"
+            ];
+          });
         in
         n2c.buildImage {
           name = cfg.imageName;
           tag = cfg.tag;
 
-          copyToRoot = [
-            rootEnv
-          ];
+          layers = [ baseLayer ] ++ cfg.layers;
+          copyToRoot = appEnv;
+          maxLayers = cfg.maxLayers;
 
           config = {
             Env = cfg.baseEnv ++ cfg.env;
