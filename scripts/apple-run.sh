@@ -12,6 +12,7 @@ Options:
   -p, --package <name>    Package name under ghcr.io/credits-infra/ (default: helixblast-dev)
   -i, --image <ref>       Full container image reference (overrides -p and -t)
   -t, --tag <tag>         Image tag (default: latest)
+  -C, --dir, --directory  Host project directory to run in (mounted at /workspace)
   --rosetta               Enable Rosetta 2 translation in guest VM (for x86_64 images)
   --rw, --writeable       Run container with writeable rootfs (default: read-only)
   -v, --volume <mount>    Additional volume mount in host:container format (repeatable)
@@ -61,6 +62,7 @@ USE_ROSETTA=false
 WORKDIR="/workspace"
 HOST_GO_DIR="${HOST_GO_DIR:-$HOME/go}"
 HOST_NPM_DIR="${HOST_NPM_DIR:-$HOME/.npm}"
+HOST_PROJECT_DIR=""
 EXTRA_VOLUMES=()
 EXTRA_ENVS=()
 
@@ -83,6 +85,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     -i|--image)
       IMAGE_OVERRIDE="$2"
+      shift 2
+      ;;
+    -C|--dir|--directory)
+      HOST_PROJECT_DIR="$2"
       shift 2
       ;;
     --rw|--writeable)
@@ -128,6 +134,15 @@ else
   IMAGE="${REGISTRY}/${PACKAGE}:${TAG}"
 fi
 
+# Change directory if host project directory is specified
+if [[ -n "$HOST_PROJECT_DIR" ]]; then
+  if [[ ! -d "$HOST_PROJECT_DIR" ]]; then
+    echo "Error: Directory '$HOST_PROJECT_DIR' does not exist." >&2
+    exit 1
+  fi
+  cd "$HOST_PROJECT_DIR"
+fi
+
 # Ensure host-side cache directories exist
 mkdir -p "$HOST_GO_DIR" "$HOST_NPM_DIR"
 
@@ -146,7 +161,7 @@ if [[ "$READ_ONLY" == true ]]; then
 fi
 
 if [[ "$USE_ROSETTA" == true ]]; then
-  CONTAINER_ARGS+=(--rosetta)
+  CONTAINER_ARGS+=(--rosetta --arch amd64)
 fi
 
 if [[ ${#EXTRA_VOLUMES[@]} -gt 0 ]]; then
