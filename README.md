@@ -111,6 +111,22 @@ Modules inherit `basePackages` (POSIX tools, GCC, Make, Git, SSL certs) and `bas
 }
 ```
 
+### Intelligent Multi-Layer Architecture & Layer Sharing
+
+Images are constructed using `nix2container`'s native layer abstraction to maximize reuse across different builder environments:
+
+1. **Shared Base Layer (`baseLayer`)**:
+   - Encapsulates foundational POSIX tools, GCC, Make, Git, SSL certificates, and root directory skeletons.
+   - Built with `n2c.buildLayer` into a standalone, reproducible layer derivation.
+   - **Cross-module deduplication**: All builder modules (e.g., `helixblast-dev`, `rust-dev`, `python-dev`) share the exact same base layer digest. GHCR skips uploading it on new images, and local clients skip re-downloading the ~300MB base layer when switching between dev environments.
+
+2. **Application / Toolchain Layer (`packages`)**:
+   - Automatically excludes any store paths already present in the parent base layer.
+   - Leverages `maxLayers` (default: 10) to automatically partition large toolchains (like Go, Node.js, BLAST+) according to store path reference popularity, optimizing incremental caching when upgrading individual tools.
+
+3. **Custom Intermediate Layers (`layers`)**:
+   - Modules can define custom intermediate layers via `layers = [ ... ]` (e.g., shared language runtimes) to insert between the base layer and top-level packages.
+
 ---
 
 ## ⚙️ Automated Maintenance & Resource Optimization
@@ -144,20 +160,21 @@ Modules inherit `basePackages` (POSIX tools, GCC, Make, Git, SSL certs) and `bas
 # 1. Enter default interactive devShell (helixblast-dev:latest)
 ./scripts/apple-run.sh
 
-# 2. Select a different container package
+# 2. Run from anywhere targeting a specific project directory (-C / --dir)
+./scripts/apple-run.sh -C /path/to/project make build
+
+# 3. Select a different container package
 ./scripts/apple-run.sh -p base-dev gcc --version
 
-# 3. Execute build or test commands safely (preserving quotes and spaces)
+# 4. Execute build or test commands safely (preserving quotes and spaces)
 ./scripts/apple-run.sh make build
 ./scripts/apple-run.sh go test -run "Test.*" ./internal/...
 
-# 4. Run with writeable rootfs for debugging
+# 5. Run with writeable rootfs for debugging
 ./scripts/apple-run.sh --rw bash
 
-# 5. Run with Rosetta 2 translation for x86_64 images
-./scripts/apple-run.sh --rosetta -t x86_64-latest bash
-
-# 6. List cached container images
+# 6. Run with Rosetta 2 translation for x86_64 images (automatically selects amd64 variant)
+./scripts/apple-run.sh --rosetta go version
 ./scripts/apple-run.sh --list
 ```
 
